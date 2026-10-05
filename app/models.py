@@ -70,6 +70,24 @@ class SubmissionCreate(BaseModel):
         return value.replace("-", "")
 
 
+class WithdrawRequest(BaseModel):
+    """CR-A: atsaukšanas iemesls, 10–500 rakstzīmes pēc atstarpju noņemšanas."""
+
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def check_reason(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise PydanticCustomError("missing", "Iemesls ir obligāts")
+        if len(value) < 10:
+            raise PydanticCustomError("string_too_short", "Iemesls ir par īsu")
+        if len(value) > 500:
+            raise PydanticCustomError("string_too_long", "Iemesls ir par garu")
+        return value
+
+
 class SubmissionCreated(BaseModel):
     id: str
     status: SubmissionStatus
