@@ -241,9 +241,43 @@ def update_status(submission_id: str, status: str) -> dict | None:
         )
     if cursor.rowcount == 0:
         return None
-    record = get(submission_id)
-    logger.info("Statuss mainīts: %s", record)
-    return record
+    # Žurnālā tikai ID un statuss. Nekad personas dati vai teksts.
+    logger.info("Statuss mainīts: %s -> %s", submission_id, status)
+    return get(submission_id)
+
+
+class StatusNotAllowed(Exception):
+    """Darbība nav atļauta iesnieguma pašreizējā statusā."""
+
+
+def change_status(
+    submission_id: str,
+    status: str,
+    allowed_from: tuple[str, ...],
+    action: str,
+    detail: str | None = None,
+) -> dict | None:
+    """Maina statusu un ieraksta auditu vienā darījumā.
+
+    Atgriež atjaunoto ierakstu vai None, ja ID nav atrasts. Ja pašreizējais
+    statuss nav allowed_from, met StatusNotAllowed, un nekas netiek mainīts.
+    """
+    with _lock:
+        row = _conn.execute(
+            "SELECT status FROM submissions WHERE id = ?", (submission_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        if row["status"] not in allowed_from:
+            raise StatusNotAllowed()
+        _conn.execute(
+            "UPDATE submissions SET status = ? WHERE id = ?", (status, submission_id)
+        )
+        _conn.execute(
+            "INSERT INTO audit (submissionId, at, action, detail) VALUES (?, ?, ?, ?)",
+            (submission_id, clock.now().isoformat(), action, detail),
+        )
+    return get(submission_id)
 
 
 def update_due_date(submission_id: str, due_date: str) -> dict:
